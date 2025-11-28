@@ -14,7 +14,113 @@ from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
+from sacrebleu import BLEU
 import warnings
+
+def greedy_decode(model, src, src_mask, max_len, tokenizer_src, tokenizer_tgt, device):
+    sos_idx = tokenizer_tgt.token_to_id("[SOS]")
+    eos_idx = tokenizer_tgt.token_to_id("[EOS]")
+    src = src.to(device)
+    src_mask = src_mask.to(device)
+    
+    # precompute the encoder output and reuse it for each step
+    encoder_output = model.encode(src, src_mask)
+    # initialize the decoder input with the start of sequence token
+    decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(src).to(device)
+    while True:
+        if decoder_input.size(1) == max_len:
+            break
+
+        decoder_mask = casual_mask(decoder_input.size(1)).to(device)
+
+        out = model.decode(decoder_input, encoder_output, src_mask, decoder_mask)
+        
+        # Project the last token's output to get log probabilities
+        prob = model.project(out[:, -1:, :])  # Shape: (1, 1, vocab_size)
+        prob = prob.squeeze(0).squeeze(0)  # Shape: (vocab_size,)
+        _, next_word = torch.max(prob, dim=-1)
+        decoder_input = torch.cat([decoder_input, next_word.unsqueeze(0).unsqueeze(0)], dim=1).type_as(src).to(device)
+        if next_word.item() == eos_idx:
+            break
+    return decoder_input.squeeze(0)
+
+def run_validation(model, val_dataloader, tokenizer_src, tokenizer_tgt, max_len, device, print_msg, global_step, writer, num_examples=2):
+    model.eval()
+    count = 0
+    
+    source_texts = []
+    expected_texts = []
+    predicted_texts = []
+    
+    val_loss = 0
+    val_count = 0
+    
+    console_width = 80
+    
+    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_tgt.token_to_id("[PAD]"), label_smoothing=0.1).to(device)
+    bleu = BLEU()
+
+    with torch.no_grad():
+        for batch in val_dataloader:
+            encoder_input = batch['encoder_input'].to(device)
+            decoder_input = batch['decoder_input'].to(device)
+            label = batch['label'].to(device)
+            encoder_mask = batch['encoder_mask'].to(device)
+            decoder_mask = batch['decoder_mask'].to(device)
+            
+            # Calculate validation loss
+            encoder_output = model.encode(encoder_input, encoder_mask)
+            decoder_output = model.decode(decoder_input, encoder_output, encoder_mask, decoder_mask)
+            proj_output = model.project(decoder_output)
+            
+            loss = loss_fn(proj_output.view(-1, tokenizer_tgt.get_vocab_size()), label.view(-1))
+            val_loss += loss.item()
+            val_count += 1
+            
+            # Decode for BLEU score calculation and display
+            assert encoder_input.size(0) == 1, "Batch size must be 1 for validation"
+            
+            model_out = greedy_decode(model, encoder_input, encoder_mask, max_len, tokenizer_src, tokenizer_tgt, device)
+            source_text = batch['src_text'][0]
+            expected_text = batch['tgt_text'][0]
+            
+            # Decode the model output
+            model_out_ids = model_out.detach().cpu().tolist()
+            predicted_text = tokenizer_tgt.decode(model_out_ids)
+            
+            # Collect texts for BLEU score
+            expected_texts.append(expected_text)
+            predicted_texts.append(predicted_text)
+            
+            # Display examples
+            if count < num_examples:
+                source_texts.append(source_text)
+        
+                print_msg('-' * console_width)
+                print_msg(f"Source: {source_text}")
+                print_msg(f"Expected: {expected_text}")
+                print_msg(f"Predicted: {predicted_text}")
+                print_msg('-' * console_width)
+                
+                count += 1
+    
+    # Calculate average validation loss
+    avg_val_loss = val_loss / val_count if val_count > 0 else 0
+    
+    # Calculate BLEU score
+    bleu_score = 0.0
+    if len(expected_texts) > 0 and len(predicted_texts) > 0:
+        # Calculate BLEU score on all validation examples
+        bleu_result = bleu.corpus_score(predicted_texts, [expected_texts])
+        bleu_score = bleu_result.score
+    
+    # Log validation metrics to TensorBoard
+    writer.add_scalar('val_loss', avg_val_loss, global_step)
+    writer.add_scalar('val_bleu', bleu_score, global_step)
+    writer.flush()
+    
+    print_msg(f"\nValidation Loss: {avg_val_loss:.4f}")
+    print_msg(f"Validation BLEU Score: {bleu_score:.2f}\n")
 
 def get_all_sentences(ds, lang):
     for item in ds:
@@ -137,6 +243,10 @@ def train_model(config):
             optimizer.step()
             optimizer.zero_grad()
             global_step += 1
+        
+        # Run validation after each epoch
+        print(f"\nRunning validation after epoch {epoch + 1}...")
+        run_validation(model, val_dataloader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, print, global_step, writer)
         
         # save the model
         model_filename = get_weights_file_path(config, epoch)

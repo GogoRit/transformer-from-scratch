@@ -3,4 +3,6 @@ datasets>=2.14.0
 tokenizers>=0.13.0
 tqdm>=4.65.0
 tensorboard>=2.13.0
+sacrebleu>=2.0.0
+nltk>=3.8.0
 
