@@ -48,10 +48,15 @@ datasets/
 *.csv
 *.json
 *.txt
+!requirements.txt
 
 # Logs
 logs/
 *.log
+runs/
+
+# Model weights
+weights/
 
 # OS
 .DS_Store
