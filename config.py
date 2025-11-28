@@ -3,8 +3,8 @@ from pathlib import Path
 
 def get_config():
     return {
-        "batch_size": 8,
-        "seq_len": 350,
+        "batch_size": 4,  # Reduced due to longer sequences
+        "seq_len": 5500,  # Set to handle max target length (5321) + padding
         "d_model": 512,
         "lang_src": "en",
         "lang_tgt": "it",
@@ -16,7 +16,7 @@ def get_config():
         "N": 6,
         "dropout": 0.1,
         "lr": 1e-4,
-        "epochs": 50,
+        "epochs": 20,
         "vocab_size": 37000,
         "preload": None,
         "device": "cuda" if torch.cuda.is_available() else "cpu"
