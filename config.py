@@ -16,7 +16,7 @@ def get_config():
         "N": 6,
         "dropout": 0.1,
         "lr": 1e-4,
-        "epochs": 20,
+        "epochs": 5,
         "vocab_size": 37000,
         "preload": None,
         "device": "cuda" if torch.cuda.is_available() else "cpu"
