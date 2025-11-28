@@ -149,10 +149,24 @@ def get_ds(config):
     tokenizer_src = get_or_build_tokenizer(config, ds_raw, config['lang_src'])
     tokenizer_tgt = get_or_build_tokenizer(config, ds_raw, config['lang_tgt'])
 
+    # Filter out sequences that are too long (accounting for SOS/EOS tokens)
+    max_seq_len = config['seq_len']
+    def filter_long_sequences(example):
+        src_ids = tokenizer_src.encode(example['translation'][config['lang_src']]).ids
+        tgt_ids = tokenizer_tgt.encode(example['translation'][config['lang_tgt']]).ids
+        # Check if sequences fit (accounting for SOS/EOS tokens)
+        # Encoder: src_len + 2 (SOS + EOS) <= seq_len
+        # Decoder: tgt_len + 1 (SOS) <= seq_len
+        return (len(src_ids) + 2 <= max_seq_len) and (len(tgt_ids) + 1 <= max_seq_len)
+    
+    print("Filtering sequences that are too long...")
+    ds_filtered = ds_raw.filter(filter_long_sequences)
+    print(f"Filtered dataset: {len(ds_raw)} -> {len(ds_filtered)} examples ({len(ds_filtered)/len(ds_raw)*100:.1f}% kept)")
+
     # keep 10% for validation
-    train_ds_size = int(len(ds_raw) * 0.9)
-    val_ds_size = len(ds_raw) - train_ds_size
-    train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
+    train_ds_size = int(len(ds_filtered) * 0.9)
+    val_ds_size = len(ds_filtered) - train_ds_size
+    train_ds_raw, val_ds_raw = random_split(ds_filtered, [train_ds_size, val_ds_size])
 
     # create a custom dataset
     train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])

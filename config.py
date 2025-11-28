@@ -3,8 +3,8 @@ from pathlib import Path
 
 def get_config():
     return {
-        "batch_size": 4,  # Reduced due to longer sequences
-        "seq_len": 5500,  # Set to handle max target length (5321) + padding
+        "batch_size": 8,  # Can use larger batch size with filtered sequences
+        "seq_len": 400,  # Filter out sequences longer than this during training
         "d_model": 512,
         "lang_src": "en",
         "lang_tgt": "it",
