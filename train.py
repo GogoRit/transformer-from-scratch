@@ -163,6 +163,12 @@ def get_ds(config):
     ds_filtered = ds_raw.filter(filter_long_sequences)
     print(f"Filtered dataset: {len(ds_raw)} -> {len(ds_filtered)} examples ({len(ds_filtered)/len(ds_raw)*100:.1f}% kept)")
 
+    # Optional: subsample dataset for quick test runs
+    max_samples = config.get("max_samples")
+    if max_samples is not None and len(ds_filtered) > max_samples:
+        print(f"Subsampling filtered dataset to {max_samples} examples for quicker tests")
+        ds_filtered = ds_filtered.shuffle(seed=42).select(range(max_samples))
+
     # keep 10% for validation
     train_ds_size = int(len(ds_filtered) * 0.9)
     val_ds_size = len(ds_filtered) - train_ds_size
