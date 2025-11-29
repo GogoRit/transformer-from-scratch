@@ -186,8 +186,20 @@ def get_ds(config):
     print(f"Maximum length of target text: {max_len_tgt}")
 
 
-    train_dataloader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
-    val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
+    train_dataloader = DataLoader(
+        train_ds,
+        batch_size=config['batch_size'],
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+    )
+    val_dataloader = DataLoader(
+        val_ds,
+        batch_size=1,
+        shuffle=False,
+        num_workers=2,
+        pin_memory=True,
+    )
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
 

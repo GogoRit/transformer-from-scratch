@@ -3,7 +3,7 @@ from pathlib import Path
 
 def get_config():
     return {
-        "batch_size": 8,  # Can use larger batch size with filtered sequences
+        "batch_size": 64,  # Increased to better utilize GPU memory
         "seq_len": 400,  # Filter out sequences longer than this during training
         "d_model": 512,
         "lang_src": "en",
@@ -15,7 +15,7 @@ def get_config():
         "h": 8,
         "N": 6,
         "dropout": 0.1,
-        "lr": 1e-4,
+        "lr": 1e-4,  # Consider increasing slightly if you push batch_size much higher (e.g. 128+)
         "epochs": 5,
         "vocab_size": 37000,
         "preload": None,
